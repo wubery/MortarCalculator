@@ -1,0 +1,116 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.example.mortarcalculator'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.example.mortarcalculator"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+        
+        // Добавляем поддержку Java 8
+        multiDexEnabled true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    packagingOptions {
+        exclude 'META-INF/DEPENDENCIES'
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/registryFile.jai'
+        exclude 'META-INF/services/javax.imageio.spi.ImageReaderSpi'
+        exclude 'META-INF/services/javax.imageio.spi.ImageWriterSpi'
+        exclude 'META-INF/services/org.geotools.coverage.grid.io.GridFormatFactorySpi'
+        exclude 'META-INF/services/org.geotools.data.DataStoreFactorySpi'
+        exclude 'META-INF/services/org.opengis.coverage.grid.GridCoverageExchange'
+        exclude 'about.ini'
+        exclude 'plugin.xml'
+        pickFirst 'org/locationtech/jts/io/ParseException.class'
+        pickFirst 'modeling32.png'
+        pickFirst 'about.mappings'
+        pickFirst 'about.properties'
+        pickFirst 'plugin.properties'
+        resources {
+            excludes += ['META-INF/DEPENDENCIES', 'META-INF/LICENSE', 'META-INF/LICENSE.txt', 'META-INF/license.txt', 'META-INF/NOTICE', 'META-INF/NOTICE.txt', 'META-INF/notice.txt', 'META-INF/ASL2.0', 'META-INF/*.kotlin_module']
+        }
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+    maven { url 'https://repo.osgeo.org/repository/release/' }
+    maven { url 'https://repo.osgeo.org/repository/snapshot/' }
+    maven { url 'https://jitpack.io' }
+}
+
+configurations.all {
+    exclude group: 'javax.media', module: 'jai_core'
+    exclude group: 'javax.media', module: 'jai_codec'
+    exclude group: 'javax.media', module: 'jai_imageio'
+    exclude group: 'org.geotools', module: 'gt-coverage'
+    exclude group: 'it.geosolutions.imageio-ext', module: 'imageio-ext-tiff'
+    resolutionStrategy {
+        force 'org.geotools:gt-main:31.0'
+        force 'org.geotools:gt-shapefile:31.0'
+        force 'org.geotools:gt-geojson:31.0'
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    
+    // Поддержка multidex
+    implementation 'androidx.multidex:multidex:2.0.1'
+
+    // Базовые зависимости GeoTools без JAI
+    implementation('org.geotools:gt-main:31.0') {
+        exclude group: 'javax.media', module: 'jai_core'
+        exclude group: 'javax.media', module: 'jai_codec'
+        exclude group: 'javax.media', module: 'jai_imageio'
+        exclude group: 'org.geotools', module: 'gt-coverage'
+        exclude group: 'it.geosolutions.imageio-ext', module: 'imageio-ext-tiff'
+    }
+    
+    implementation('org.geotools:gt-shapefile:31.0') {
+        exclude group: 'javax.media', module: 'jai_core'
+        exclude group: 'javax.media', module: 'jai_codec'
+        exclude group: 'javax.media', module: 'jai_imageio'
+        exclude group: 'org.geotools', module: 'gt-coverage'
+        exclude group: 'it.geosolutions.imageio-ext', module: 'imageio-ext-tiff'
+    }
+    
+    implementation('org.geotools:gt-geojson:31.0') {
+        exclude group: 'javax.media', module: 'jai_core'
+        exclude group: 'javax.media', module: 'jai_codec'
+        exclude group: 'javax.media', module: 'jai_imageio'
+        exclude group: 'org.geotools', module: 'gt-coverage'
+        exclude group: 'it.geosolutions.imageio-ext', module: 'imageio-ext-tiff'
+    }
+    
+    // Android-совместимые библиотеки для работы с изображениями
+    implementation 'com.github.bumptech.glide:glide:4.12.0'
+    annotationProcessor 'com.github.bumptech.glide:compiler:4.12.0'
+}

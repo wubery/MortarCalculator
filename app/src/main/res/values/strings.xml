@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mortar Calculator</string>
+    <string name="map_image">Карта</string>
+    <string name="touchable_overlay">Слой для касаний</string>
+    <string name="reset">Сброс</string>
+</resources> 
