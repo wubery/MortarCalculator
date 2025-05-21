@@ -5,6 +5,8 @@ import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -14,29 +16,56 @@ import java.io.InputStream;
 
 public class MainActivity extends AppCompatActivity 
         implements MortarSettingsDialog.OnMortarSettingsListener,
-                   TargetSettingsDialog.OnTargetSettingsListener {
+                   TargetSettingsDialog.OnTargetSettingsListener,
+                   WeatherSettingsDialog.OnWeatherSettingsListener {
 
     private static final String TAG = "MainActivity";
     private ImageView mapImageView;
     private TouchableImageView touchableImageView;
+    private TextView targetAnglesText;
+    private BallisticCalculator.WeatherConditions currentWeather;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Установка полноэкранного режима
+        getWindow().setFlags(
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        );
+        
+        // Скрытие системных UI элементов
+        getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        );
+        
         setContentView(R.layout.activity_main);
 
         mapImageView = findViewById(R.id.mapImageView);
-        touchableImageView = findViewById(R.id.touchableImageView);
+        touchableImageView = findViewById(R.id.map_view);
         
         // Устанавливаем правильный ScaleType для карты
         mapImageView.setScaleType(ImageView.ScaleType.MATRIX);
         
         touchableImageView.setMapImageView(mapImageView);
 
-        TextView targetAnglesText = findViewById(R.id.targetAnglesText);
-        Button resetButton = findViewById(R.id.resetButton);
+        targetAnglesText = findViewById(R.id.targetAnglesText);
         touchableImageView.setTargetAnglesText(targetAnglesText);
 
+        // Инициализация метеоусловий по умолчанию
+        currentWeather = new BallisticCalculator.WeatherConditions(0.0, 1013.25, 50.0, 0.0, 0.0);
+
+        // Добавляем кнопку настроек погоды
+        Button weatherButton = findViewById(R.id.weather_button);
+        weatherButton.setOnClickListener(v -> showWeatherSettingsDialog());
+
+        Button resetButton = findViewById(R.id.resetButton);
         resetButton.setOnClickListener(v -> touchableImageView.reset());
 
         loadMapImage();
@@ -84,6 +113,20 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
+    private void showWeatherSettingsDialog() {
+        Log.d(TAG, String.format(
+            "Showing weather settings dialog with current values:\n" +
+            "Temperature: %.1f°C\n" +
+            "Pressure: %.1f hPa\n" +
+            "Humidity: %.1f%%\n" +
+            "Wind: %.1f m/s @ %.1f°",
+            currentWeather.temperature, currentWeather.pressure, currentWeather.humidity,
+            currentWeather.windSpeed, currentWeather.windDirection));
+            
+        WeatherSettingsDialog dialog = WeatherSettingsDialog.newInstance(currentWeather);
+        dialog.show(getSupportFragmentManager(), "weather_settings");
+    }
+
     @Override
     public void onMortarSettingsChanged(int mortarIndex, double elevation) {
         touchableImageView.updateMortarSettings(mortarIndex, elevation);
@@ -97,5 +140,20 @@ public class MainActivity extends AppCompatActivity
     @Override
     public void onMortarDeleted() {
         touchableImageView.deleteMortar();
+    }
+
+    @Override
+    public void onWeatherSettingsChanged(BallisticCalculator.WeatherConditions weather) {
+        Log.d(TAG, String.format(
+            "Weather settings changed in MainActivity:\n" +
+            "Temperature: %.1f°C\n" +
+            "Pressure: %.1f hPa\n" +
+            "Humidity: %.1f%%\n" +
+            "Wind: %.1f m/s @ %.1f°",
+            weather.temperature, weather.pressure, weather.humidity,
+            weather.windSpeed, weather.windDirection));
+        
+        currentWeather = weather;
+        touchableImageView.onWeatherSettingsChanged(weather);
     }
 }

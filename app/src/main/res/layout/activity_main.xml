@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -7,42 +7,51 @@
         android:id="@+id/mapImageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:scaleType="matrix"
-        android:contentDescription="@string/map_image" />
+        android:scaleType="fitCenter"/>
 
     <com.example.mortarcalculator.TouchableImageView
-        android:id="@+id/touchableImageView"
+        android:id="@+id/map_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:scaleType="matrix"
-        android:contentDescription="@string/touchable_overlay" />
+        android:layout_height="match_parent"/>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|top"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <Button
+            android:id="@+id/resetButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Сброс"
+            android:layout_marginBottom="8dp"/>
+
+        <Button
+            android:id="@+id/weather_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Метеоусловия"/>
+
+    </LinearLayout>
 
     <ScrollView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentStart="true"
-        android:layout_alignParentBottom="true"
+        android:layout_gravity="start|top"
         android:layout_margin="16dp"
-        android:maxHeight="200dp"
-        android:background="#80000000">
+        android:background="#B3FFFFFF"
+        android:maxWidth="300dp"
+        android:padding="8dp">
 
         <TextView
             android:id="@+id/targetAnglesText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:padding="8dp"
-            android:textSize="16sp"
-            android:textColor="#FFFFFF" />
+            android:textColor="#000000"
+            android:textSize="14sp"/>
 
     </ScrollView>
 
-    <Button
-        android:id="@+id/resetButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentEnd="true"
-        android:layout_alignParentBottom="true"
-        android:layout_margin="16dp"
-        android:text="@string/reset" />
-
-</RelativeLayout> 
+</FrameLayout> 

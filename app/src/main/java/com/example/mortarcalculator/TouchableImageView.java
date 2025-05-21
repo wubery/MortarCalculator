@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import android.util.Log;
 import androidx.fragment.app.FragmentActivity;
+import androidx.appcompat.app.AppCompatActivity;
 
 public class TouchableImageView extends AppCompatImageView {
     private ImageView mapImageView;
@@ -45,6 +46,10 @@ public class TouchableImageView extends AppCompatImageView {
 
     private GeoPoint selectedMortar; // Добавляем поле для хранения выбранного миномета
 
+    private BallisticCalculator.WeatherConditions currentWeather;
+
+    private static final String TAG = "TouchableImageView";
+
     public TouchableImageView(Context context) {
         super(context);
         init(context);
@@ -64,6 +69,9 @@ public class TouchableImageView extends AppCompatImageView {
         circlePaint.setStyle(Paint.Style.STROKE);
         circlePaint.setStrokeWidth(2);
         circlePaint.setAlpha(128);
+
+        // Инициализация метеоусловий по умолчанию
+        currentWeather = new BallisticCalculator.WeatherConditions(0.0, 1013.25, 50.0, 0.0, 0.0);
 
         scaleDetector = new ScaleGestureDetector(context, new ScaleListener());
         gestureDetector = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
@@ -201,7 +209,7 @@ public class TouchableImageView extends AppCompatImageView {
             x, y, points[0], points[1], normalizedX, normalizedY, lat, lon
         ));
         
-        targetPoint = new GeoPoint(lat, lon);
+        targetPoint = new GeoPoint(lat, lon, 0.0); // Устанавливаем начальную высоту 0 метров
         calculateAndDisplayResults();
         invalidate();
     }
@@ -312,6 +320,28 @@ public class TouchableImageView extends AppCompatImageView {
         }
     }
 
+    private void showWeatherSettingsDialog() {
+        WeatherSettingsDialog dialog = WeatherSettingsDialog.newInstance(currentWeather);
+        dialog.show(((AppCompatActivity) getContext()).getSupportFragmentManager(), "weather_settings");
+    }
+
+    public void onWeatherSettingsChanged(BallisticCalculator.WeatherConditions weather) {
+        Log.d(TAG, String.format(
+            "Weather settings changed in TouchableImageView:\n" +
+            "Temperature: %.1f°C\n" +
+            "Pressure: %.1f hPa\n" +
+            "Humidity: %.1f%%\n" +
+            "Wind: %.1f m/s @ %.1f°",
+            weather.temperature, weather.pressure, weather.humidity,
+            weather.windSpeed, weather.windDirection));
+            
+        this.currentWeather = weather;
+        if (targetPoint != null) {
+            Log.d(TAG, "Recalculating results with new weather conditions");
+            calculateAndDisplayResults();
+        }
+    }
+
     private void calculateAndDisplayResults() {
         if (mortars.isEmpty() || targetPoint == null || targetAnglesText == null) return;
 
@@ -324,18 +354,18 @@ public class TouchableImageView extends AppCompatImageView {
                     mortar
             );
 
-            // Используем заданные высоты вместо чтения из DSM
             double elevationDiff = targetPoint.getElevation() - mortar.getElevation();
             double distance = Math.sqrt(delta[0]*delta[0] + delta[1]*delta[1]);
             
-            // Добавляем расширенную отладочную информацию
             Log.d("MortarCalc", String.format(
                 "Mortar %d:\n" +
                 "- Type: %s\n" +
                 "- Distance: %.1fm (min: %.1fm, max: %.1fm)\n" +
                 "- Delta: dx=%.1fm, dy=%.1fm\n" +
                 "- Elevation diff: %.1fm\n" +
-                "- Coordinates: mortar(%.6f, %.6f), target(%.6f, %.6f)",
+                "- Coordinates: mortar(%.6f, %.6f), target(%.6f, %.6f)\n" +
+                "- Weather: temp=%.1f°C, pressure=%.1fhPa, humidity=%.1f%%, " +
+                "wind=%.1fm/s @ %.1f°",
                 i+1,
                 mortar.getMortarType().getName(),
                 distance,
@@ -345,11 +375,17 @@ public class TouchableImageView extends AppCompatImageView {
                 delta[1],
                 elevationDiff,
                 mortar.getLatitude(), mortar.getLongitude(),
-                targetPoint.getLatitude(), targetPoint.getLongitude()
+                targetPoint.getLatitude(), targetPoint.getLongitude(),
+                currentWeather.temperature,
+                currentWeather.pressure,
+                currentWeather.humidity,
+                currentWeather.windSpeed,
+                currentWeather.windDirection
             ));
 
             BallisticCalculator.BallisticResult[] trajectories = 
-                BallisticCalculator.calculateTrajectory(mortar.getMortarType(), distance, elevationDiff);
+                BallisticCalculator.calculateTrajectory(mortar.getMortarType(), distance, 
+                                                      elevationDiff, currentWeather);
 
             String color = String.format("#%06X", (0xFFFFFF & mortarColors[i]));
             results.append(String.format(
@@ -357,23 +393,23 @@ public class TouchableImageView extends AppCompatImageView {
                     "• Тип: %s\n" +
                     "• Азимут: %.1f°\n" +
                     "• Дистанция: %.0fм\n" +
-                    "• Превышение: %.1fм\n",
+                    "• Превышение: %.1fм\n" +
+                    "• Метеоусловия:\n" +
+                    "  - Температура: %.1f°C\n" +
+                    "  - Давление: %.1f гПа\n" +
+                    "  - Влажность: %.1f%%\n" +
+                    "  - Ветер: %.1f м/с @ %.1f°\n",
                     i+1,
                     color,
                     mortar.getMortarType().getName(),
                     calculateAzimuth(mortar, targetPoint),
                     distance,
-                    elevationDiff
-            ));
-
-            // Добавляем отладочную информацию о результатах расчета
-            Log.d("MortarCalc", String.format(
-                "Trajectories for mortar %d:\n" +
-                "- High angle: valid=%b, angle=%.1f°\n" +
-                "- Low angle: valid=%b, angle=%.1f°",
-                i+1,
-                trajectories[0].isValid, trajectories[0].angle,
-                trajectories[1].isValid, trajectories[1].angle
+                    elevationDiff,
+                    currentWeather.temperature,
+                    currentWeather.pressure,
+                    currentWeather.humidity,
+                    currentWeather.windSpeed,
+                    currentWeather.windDirection
             ));
 
             if (trajectories[0].isValid || trajectories[1].isValid) {
@@ -442,6 +478,36 @@ public class TouchableImageView extends AppCompatImageView {
         double y = Math.sin(dLon) * Math.cos(lat2);
         double x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
         double azimuth = Math.toDegrees(Math.atan2(y, x));
+        
+        // Корректируем азимут с учетом ветра
+        if (currentWeather != null && currentWeather.windSpeed > 0) {
+            // Рассчитываем угол между направлением ветра и азимутом
+            double windAzimuthDiff = (currentWeather.windDirection - azimuth + 360) % 360;
+            
+            // Корректируем азимут в зависимости от силы ветра и его направления
+            // Чем сильнее ветер и чем больше угол между ветром и азимутом, тем больше коррекция
+            double windCorrection = currentWeather.windSpeed * Math.sin(Math.toRadians(windAzimuthDiff)) * 0.5;
+            
+            // Применяем коррекцию
+            azimuth = (azimuth + windCorrection + 360) % 360;
+            
+            Log.d("MortarCalc", String.format(
+                "Azimuth correction:\n" +
+                "Base azimuth: %.1f°\n" +
+                "Wind direction: %.1f°\n" +
+                "Wind speed: %.1f m/s\n" +
+                "Wind-azimuth difference: %.1f°\n" +
+                "Correction: %.1f°\n" +
+                "Final azimuth: %.1f°",
+                azimuth - windCorrection,
+                currentWeather.windDirection,
+                currentWeather.windSpeed,
+                windAzimuthDiff,
+                windCorrection,
+                azimuth
+            ));
+        }
+        
         return (azimuth + 360) % 360;
     }
 

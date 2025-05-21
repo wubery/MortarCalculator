@@ -35,8 +35,8 @@ public class MortarType {
             211.0,
             50.0,
             4000.0,
-            45.0,
-            85.0,
+            1.0,
+            89.0,
             1220.0,
             3.1,
             0.295
@@ -47,8 +47,8 @@ public class MortarType {
             200.0,
             70.0,
             5935.0,
-            45.0,
-            85.0,
+            1.0,
+            89.0,
             1310.0,
             4.1,
             0.290
@@ -59,8 +59,8 @@ public class MortarType {
             272.0,
             100.0,
             7100.0,
-            45.0,
-            85.0,
+            1.0,
+            89.0,
             1862.0,
             16.0,
             0.310
@@ -78,6 +78,9 @@ public class MortarType {
     public double getBarrelLength() { return barrelLength; }
     public double getProjectileWeight() { return projectileWeight; }
     public double getDragCoefficient() { return dragCoefficient; }
+    public double getProjectileMass() {
+        return projectileWeight / 1000.0; // Конвертируем граммы в килограммы
+    }
 
     @Override
     public String toString() {
