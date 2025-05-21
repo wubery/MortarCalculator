@@ -1,6 +1,8 @@
-# Mortar Calculator
+# Калькулятор минометного огня
 
-An Android application for calculating mortar trajectories and ballistic parameters. This calculator helps determine optimal firing angles and trajectories for different mortar types, taking into account various environmental factors.
+[![Демонстрация работы приложения](docs/media/demo.mp4)](docs/media/demo.mp4)
+
+Мобильное приложение для учебного пособия по основам баллистики и аэродинамики минометного огня.
 
 ## Features
 
