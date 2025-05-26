@@ -31,8 +31,8 @@ public class TouchableImageView extends AppCompatImageView {
     
     // Константы для размера карты (35км x 35км)
     private static final float MAP_SIZE_METERS = 35000f;
-    private static final float MAP_DEGREES = 1.0f; // размер карты в градусах (1 градус ≈ 35км на этой широте)
-    private static final float METERS_PER_DEGREE = MAP_SIZE_METERS / MAP_DEGREES; // метров на градус
+    private static final float MAP_DEGREES = MAP_SIZE_METERS / 111000f; // 1 градус ≈ 111 км на этой широте
+    private static final float METERS_PER_DEGREE = 111000f; // метров в одном градусе
     private static final int MAP_RESOLUTION = 4096; // разрешение карты в пикселях
     private static final float METERS_PER_PIXEL = MAP_SIZE_METERS / MAP_RESOLUTION;
 
@@ -140,6 +140,12 @@ public class TouchableImageView extends AppCompatImageView {
 
     public void setTargetAnglesText(TextView textView) {
         this.targetAnglesText = textView;
+        // Если уже есть данные для отображения, показываем их
+        if (mortars.size() > 0 && targetPoint != null) {
+            calculateAndDisplayResults();
+        } else {
+            updateStatusText();
+        }
     }
 
     public void reset() {
@@ -291,32 +297,20 @@ public class TouchableImageView extends AppCompatImageView {
 
         // Показываем соответствующий диалог
         if (selectedMortar != null) {
-            showMortarSettingsDialog(selectedMortar);
+            MortarSettingsDialog dialog = MortarSettingsDialog.newInstance(
+                java.util.Arrays.asList(MortarType.PREDEFINED_MORTARS).indexOf(selectedMortar.getMortarType()),
+                selectedMortar.getElevation(),
+                selectedMortar.getMortarType().getCaliber() == 82 ?
+                    java.util.Arrays.asList(AmmoType.PREDEFINED_AMMO_82MM).indexOf(selectedMortar.getAmmoType()) :
+                    java.util.Arrays.asList(AmmoType.PREDEFINED_AMMO_120MM).indexOf(selectedMortar.getAmmoType())
+            );
+            dialog.setOnSettingsChangedListener((mortarIndex, elevation, ammoIndex) -> {
+                updateMortarSettings(mortarIndex, elevation, ammoIndex);
+            });
+            dialog.show(((FragmentActivity) getContext()).getSupportFragmentManager(), "mortar_settings");
         } else if (touchedTarget) {
-            showTargetSettingsDialog();
-        }
-    }
-
-    private void showMortarSettingsDialog(GeoPoint mortar) {
-        FragmentActivity activity = (FragmentActivity) getContext();
-        if (activity != null) {
-            int mortarIndex = 0;
-            for (int i = 0; i < MortarType.PREDEFINED_MORTARS.length; i++) {
-                if (mortar.getMortarType().getName().equals(MortarType.PREDEFINED_MORTARS[i].getName())) {
-                    mortarIndex = i;
-                    break;
-                }
-            }
-            MortarSettingsDialog dialog = MortarSettingsDialog.newInstance(mortarIndex, mortar.getElevation());
-            dialog.show(activity.getSupportFragmentManager(), "mortar_settings");
-        }
-    }
-
-    private void showTargetSettingsDialog() {
-        FragmentActivity activity = (FragmentActivity) getContext();
-        if (activity != null && targetPoint != null) {
             TargetSettingsDialog dialog = TargetSettingsDialog.newInstance(targetPoint.getElevation());
-            dialog.show(activity.getSupportFragmentManager(), "target_settings");
+            dialog.show(((FragmentActivity) getContext()).getSupportFragmentManager(), "target_settings");
         }
     }
 
@@ -343,54 +337,76 @@ public class TouchableImageView extends AppCompatImageView {
     }
 
     private void calculateAndDisplayResults() {
-        if (mortars.isEmpty() || targetPoint == null || targetAnglesText == null) return;
+        if (mortars.isEmpty() || targetPoint == null || targetAnglesText == null) {
+            return;
+        }
 
-        StringBuilder results = new StringBuilder("Результаты:\n\n");
+        StringBuilder results = new StringBuilder();
+        results.append("Результаты расчета:\n\n");
+        android.util.Log.d("TouchableImageView", "Calculating results for " + mortars.size() + " mortars");
+
         for (int i = 0; i < mortars.size(); i++) {
             GeoPoint mortar = mortars.get(i);
-            double[] delta = convertToLocalCoordinates(
-                    targetPoint.getLatitude(),
-                    targetPoint.getLongitude(),
-                    mortar
-            );
+            String color = String.format("#%06X", (0xFFFFFF & mortarColors[i]));
 
+            // Рассчитываем дистанцию и превышение
+            double distance = calculateDistance(mortar, targetPoint);
             double elevationDiff = targetPoint.getElevation() - mortar.getElevation();
-            double distance = Math.sqrt(delta[0]*delta[0] + delta[1]*delta[1]);
-            
-            Log.d("MortarCalc", String.format(
-                "Mortar %d:\n" +
-                "- Type: %s\n" +
-                "- Distance: %.1fm (min: %.1fm, max: %.1fm)\n" +
-                "- Delta: dx=%.1fm, dy=%.1fm\n" +
-                "- Elevation diff: %.1fm\n" +
-                "- Coordinates: mortar(%.6f, %.6f), target(%.6f, %.6f)\n" +
-                "- Weather: temp=%.1f°C, pressure=%.1fhPa, humidity=%.1f%%, " +
-                "wind=%.1fm/s @ %.1f°",
+
+            android.util.Log.d("TouchableImageView", String.format(
+                "Mortar %d calculation:\n" +
+                "Type: %s\n" +
+                "Ammo: %s\n" +
+                "Distance: %.1f m\n" +
+                "Elevation diff: %.1f m\n" +
+                "Weather: temp=%.1f°C, pressure=%.1f hPa, wind=%.1f m/s @ %.1f°",
                 i+1,
                 mortar.getMortarType().getName(),
+                mortar.getAmmoType().getName(),
                 distance,
-                mortar.getMortarType().getMinRange(),
-                mortar.getMortarType().getMaxRange(),
-                delta[0],
-                delta[1],
                 elevationDiff,
-                mortar.getLatitude(), mortar.getLongitude(),
-                targetPoint.getLatitude(), targetPoint.getLongitude(),
                 currentWeather.temperature,
                 currentWeather.pressure,
-                currentWeather.humidity,
                 currentWeather.windSpeed,
                 currentWeather.windDirection
             ));
 
-            BallisticCalculator.BallisticResult[] trajectories = 
-                BallisticCalculator.calculateTrajectory(mortar.getMortarType(), distance, 
-                                                      elevationDiff, currentWeather);
+            // Синхронизируем тип боеприпаса в объекте типа миномета с типом в объекте миномета
+            mortar.getMortarType().setAmmoType(mortar.getAmmoType());
+            
+            // Проверяем, что тип боеприпаса действительно установился
+            android.util.Log.d("TouchableImageView", String.format(
+                "Synchronized ammo types:\n" +
+                "GeoPoint ammo: %s\n" +
+                "MortarType ammo: %s",
+                mortar.getAmmoType().getName(),
+                mortar.getMortarType().getAmmoType().getName()
+            ));
 
-            String color = String.format("#%06X", (0xFFFFFF & mortarColors[i]));
+            // Рассчитываем траектории
+            BallisticCalculator.BallisticResult[] trajectories = BallisticCalculator.calculateTrajectory(
+                mortar.getMortarType(),
+                distance,
+                elevationDiff,
+                currentWeather
+            );
+
+            // Логируем результаты расчета
+            if (trajectories[0].isValid || trajectories[1].isValid) {
+                android.util.Log.d("TouchableImageView", String.format(
+                    "Trajectories for mortar %d:\n" +
+                    "High angle: %.1f°\n" +
+                    "Low angle: %.1f°",
+                    i+1,
+                    trajectories[0].isValid ? trajectories[0].angle : -1,
+                    trajectories[1].isValid ? trajectories[1].angle : -1
+                ));
+            }
+
             results.append(String.format(
                     "M%d (цвет: %s)\n" +
                     "• Тип: %s\n" +
+                    "• Боеприпас: %s\n" +
                     "• Азимут: %.1f°\n" +
                     "• Дистанция: %.0fм\n" +
                     "• Превышение: %.1fм\n" +
@@ -398,10 +414,11 @@ public class TouchableImageView extends AppCompatImageView {
                     "  - Температура: %.1f°C\n" +
                     "  - Давление: %.1f гПа\n" +
                     "  - Влажность: %.1f%%\n" +
-                    "  - Ветер: %.1f м/с @ %.1f°\n",
+                    "  - Ветер: %.1f m/s @ %.1f°\n",
                     i+1,
                     color,
                     mortar.getMortarType().getName(),
+                    mortar.getAmmoType().getName(),
                     calculateAzimuth(mortar, targetPoint),
                     distance,
                     elevationDiff,
@@ -418,10 +435,12 @@ public class TouchableImageView extends AppCompatImageView {
                     results.append(String.format(
                             "  - Угол: %.1f°\n" +
                             "  - Макс. высота: %.0fм\n" +
-                            "  - Время полёта: %.1fс\n",
+                            "  - Время полёта: %.1fс\n" +
+                            "  - Радиус поражения: %.0fм\n",
                             trajectories[0].angle,
                             trajectories[0].maxHeight,
-                            trajectories[0].timeOfFlight
+                            trajectories[0].timeOfFlight,
+                            mortar.getAmmoType().getFragmentationRadius()
                     ));
                 } else {
                     results.append("  - Недоступна\n");
@@ -432,10 +451,12 @@ public class TouchableImageView extends AppCompatImageView {
                     results.append(String.format(
                             "  - Угол: %.1f°\n" +
                             "  - Макс. высота: %.0fм\n" +
-                            "  - Время полёта: %.1fс\n",
+                            "  - Время полёта: %.1fс\n" +
+                            "  - Радиус поражения: %.0fм\n",
                             trajectories[1].angle,
                             trajectories[1].maxHeight,
-                            trajectories[1].timeOfFlight
+                            trajectories[1].timeOfFlight,
+                            mortar.getAmmoType().getFragmentationRadius()
                     ));
                 } else {
                     results.append("  - Недоступна\n");
@@ -452,6 +473,7 @@ public class TouchableImageView extends AppCompatImageView {
             results.append("\n");
         }
         targetAnglesText.setText(results.toString());
+        targetAnglesText.setVisibility(android.view.View.VISIBLE);
     }
 
     private void updateStatusText() {
@@ -539,7 +561,8 @@ public class TouchableImageView extends AppCompatImageView {
             
             // Draw maximum range circle using the mortar's actual maximum range
             float maxRange = (float) mortar.getMortarType().getMaxRange();
-            float radiusPixels = (maxRange / MAP_SIZE_METERS) * MAP_RESOLUTION;
+            // Преобразуем максимальную дальность в пиксели
+            float radiusPixels = maxRange * (MAP_RESOLUTION / MAP_SIZE_METERS);
             
             paint.setColor(mortarColors[i]);
             circlePaint.setColor(mortarColors[i]);
@@ -585,12 +608,76 @@ public class TouchableImageView extends AppCompatImageView {
         invalidate();
     }
 
-    public void updateMortarSettings(int mortarIndex, double elevation) {
+    public void updateMortarSettings(int mortarIndex, double elevation, int ammoIndex) {
         if (selectedMortar != null) {
-            selectedMortar.setMortarType(MortarType.PREDEFINED_MORTARS[mortarIndex]);
+            android.util.Log.d("TouchableImageView", String.format(
+                "Updating mortar settings:\n" +
+                "Old type: %s\n" +
+                "Old ammo: %s\n" +
+                "New mortar index: %d\n" +
+                "New elevation: %.1f\n" +
+                "New ammo index: %d",
+                selectedMortar.getMortarType().getName(),
+                selectedMortar.getAmmoType().getName(),
+                mortarIndex,
+                elevation,
+                ammoIndex
+            ));
+
+            // Сохраняем старый тип боеприпаса для логирования и проверки необходимости обновления угла
+            AmmoType oldAmmoType = selectedMortar.getAmmoType();
+            
+            // Важно: сначала установим новый тип миномета
+            MortarType mortarType = MortarType.PREDEFINED_MORTARS[mortarIndex];
+            selectedMortar.setMortarType(mortarType);
             selectedMortar.setElevation(elevation);
-            calculateAndDisplayResults();
-            invalidate();
+            
+            // Затем явно установим новый тип боеприпаса в зависимости от калибра миномета
+            AmmoType newAmmoType = null;
+            if (mortarType.getCaliber() == 82) {
+                newAmmoType = AmmoType.PREDEFINED_AMMO_82MM[ammoIndex];
+            } else {
+                newAmmoType = AmmoType.PREDEFINED_AMMO_120MM[ammoIndex];
+            }
+            
+            // Устанавливаем тип боеприпаса и в geoPoint, и в mortarType
+            selectedMortar.setAmmoType(newAmmoType);
+            mortarType.setAmmoType(newAmmoType);
+            
+            // Проверяем, действительно ли изменился тип боеприпаса
+            boolean ammoTypeChanged = !selectedMortar.getAmmoType().getName().equals(oldAmmoType.getName());
+
+            android.util.Log.d("TouchableImageView", String.format(
+                "Mortar settings updated:\n" +
+                "New type: %s\n" +
+                "New ammo: %s (changed from %s)\n" +
+                "Ammo type changed: %b\n" +
+                "Will apply correction: %b\n" +
+                "GeoPoint ammo: %s\n" +
+                "MortarType ammo: %s",
+                selectedMortar.getMortarType().getName(),
+                selectedMortar.getAmmoType().getName(),
+                oldAmmoType.getName(),
+                ammoTypeChanged,
+                selectedMortar.getAmmoType().getName().contains("ОФ-"),
+                selectedMortar.getAmmoType().getName(),
+                selectedMortar.getMortarType().getAmmoType().getName()
+            ));
+            
+            // Принудительно пересчитываем и обновляем результаты
+            if (targetPoint != null && targetAnglesText != null) {
+                android.util.Log.d("TouchableImageView", "Recalculating results after settings update");
+                
+                // Гарантируем полное обновление расчетов
+                calculateAndDisplayResults();
+                
+                targetAnglesText.setVisibility(android.view.View.VISIBLE);
+                
+                // Принудительно запрашиваем перерисовку
+                invalidate();
+                // Запрашиваем обновление разметки
+                requestLayout();
+            }
         }
     }
 
@@ -613,5 +700,35 @@ public class TouchableImageView extends AppCompatImageView {
             }
             invalidate();
         }
+    }
+
+    private double calculateDistance(GeoPoint from, GeoPoint to) {
+        // Рассчитываем разницу координат
+        double dLon = to.getLongitude() - from.getLongitude();
+        double dLat = to.getLatitude() - from.getLatitude();
+        
+        // Переводим разницу в градусах в метры с учетом реального масштаба
+        double dx = dLon * METERS_PER_DEGREE * Math.cos(Math.toRadians((from.getLatitude() + to.getLatitude()) / 2));
+        double dy = dLat * METERS_PER_DEGREE;
+        
+        // Рассчитываем прямое расстояние по теореме Пифагора
+        double distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // Добавляем отладочный вывод
+        Log.d(TAG, String.format(
+            "Distance calculation:\n" +
+            "From: (%.6f, %.6f)\n" +
+            "To: (%.6f, %.6f)\n" +
+            "dLon: %.6f°, dLat: %.6f°\n" +
+            "dx: %.1fm, dy: %.1fm\n" +
+            "Distance: %.1fm",
+            from.getLatitude(), from.getLongitude(),
+            to.getLatitude(), to.getLongitude(),
+            dLon, dLat,
+            dx, dy,
+            distance
+        ));
+        
+        return distance;
     }
 }

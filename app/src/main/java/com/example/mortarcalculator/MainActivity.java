@@ -15,7 +15,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 public class MainActivity extends AppCompatActivity 
-        implements MortarSettingsDialog.OnMortarSettingsListener,
+        implements MortarSettingsDialog.OnSettingsChangedListener,
                    TargetSettingsDialog.OnTargetSettingsListener,
                    WeatherSettingsDialog.OnWeatherSettingsListener {
 
@@ -128,18 +128,13 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
-    public void onMortarSettingsChanged(int mortarIndex, double elevation) {
-        touchableImageView.updateMortarSettings(mortarIndex, elevation);
+    public void onSettingsChanged(int mortarIndex, double elevation, int ammoIndex) {
+        touchableImageView.updateMortarSettings(mortarIndex, elevation, ammoIndex);
     }
 
     @Override
     public void onTargetSettingsChanged(double elevation) {
         touchableImageView.updateTargetSettings(elevation);
-    }
-
-    @Override
-    public void onMortarDeleted() {
-        touchableImageView.deleteMortar();
     }
 
     @Override

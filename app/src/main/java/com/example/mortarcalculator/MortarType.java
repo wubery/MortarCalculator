@@ -9,12 +9,11 @@ public class MortarType {
     private final double minElevation; // минимальный угол возвышения
     private final double maxElevation; // максимальный угол возвышения
     private final double barrelLength; // длина ствола в мм
-    private final double projectileWeight; // вес мины в кг
-    private final double dragCoefficient; // коэффициент лобового сопротивления
+    private AmmoType ammoType; // текущий тип боеприпаса
 
     public MortarType(String name, int caliber, double muzzleVelocity, double minRange, 
                      double maxRange, double minElevation, double maxElevation, 
-                     double barrelLength, double projectileWeight, double dragCoefficient) {
+                     double barrelLength) {
         this.name = name;
         this.caliber = caliber;
         this.muzzleVelocity = muzzleVelocity;
@@ -23,8 +22,8 @@ public class MortarType {
         this.minElevation = minElevation;
         this.maxElevation = maxElevation;
         this.barrelLength = barrelLength;
-        this.projectileWeight = projectileWeight;
-        this.dragCoefficient = dragCoefficient;
+        // Устанавливаем боеприпас по умолчанию в зависимости от калибра
+        this.ammoType = caliber == 82 ? AmmoType.PREDEFINED_AMMO_82MM[0] : AmmoType.PREDEFINED_AMMO_120MM[0];
     }
 
     // Предопределенные типы минометов
@@ -37,9 +36,7 @@ public class MortarType {
             4000.0,
             1.0,
             89.0,
-            1220.0,
-            3.1,
-            0.295
+            1220.0
         ),
         new MortarType(
             "M252 (81мм)",
@@ -49,9 +46,7 @@ public class MortarType {
             5935.0,
             1.0,
             89.0,
-            1310.0,
-            4.1,
-            0.290
+            1310.0
         ),
         new MortarType(
             "2Б11 Сани (120мм)",
@@ -61,9 +56,7 @@ public class MortarType {
             7100.0,
             1.0,
             89.0,
-            1862.0,
-            16.0,
-            0.310
+            1862.0
         )
     };
 
@@ -76,10 +69,41 @@ public class MortarType {
     public double getMinElevation() { return minElevation; }
     public double getMaxElevation() { return maxElevation; }
     public double getBarrelLength() { return barrelLength; }
-    public double getProjectileWeight() { return projectileWeight; }
-    public double getDragCoefficient() { return dragCoefficient; }
-    public double getProjectileMass() {
-        return projectileWeight / 1000.0; // Конвертируем граммы в килограммы
+    
+    // Методы для работы с типом боеприпаса
+    public AmmoType getAmmoType() { return ammoType; }
+    public void setAmmoType(AmmoType ammoType) { 
+        AmmoType oldAmmoType = this.ammoType;
+        
+        if ((caliber == 82 && ammoType == AmmoType.PREDEFINED_AMMO_82MM[0]) ||
+            (caliber == 82 && ammoType == AmmoType.PREDEFINED_AMMO_82MM[1]) ||
+            (caliber == 120 && ammoType == AmmoType.PREDEFINED_AMMO_120MM[0]) ||
+            (caliber == 120 && ammoType == AmmoType.PREDEFINED_AMMO_120MM[1])) {
+            
+            this.ammoType = ammoType;
+            
+            // Проверяем, действительно ли изменился тип боеприпаса
+            boolean ammoTypeChanged = this.ammoType != oldAmmoType;
+            
+            android.util.Log.d("MortarType", String.format(
+                "Ammo type updated for %s:\n" +
+                "Old: %s\n" +
+                "New: %s\n" +
+                "Changed: %b\n" +
+                "Is HE (with correction): %b",
+                this.name,
+                oldAmmoType != null ? oldAmmoType.getName() : "null",
+                this.ammoType.getName(),
+                ammoTypeChanged,
+                this.ammoType.getName().contains("ОФ-")
+            ));
+        } else {
+            android.util.Log.w("MortarType", String.format(
+                "Invalid ammo type for %s (caliber %d mm): %s",
+                this.name, this.caliber,
+                ammoType != null ? ammoType.getName() : "null" 
+            ));
+        }
     }
 
     @Override
